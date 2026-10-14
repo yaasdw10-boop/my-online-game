@@ -1,308 +1,50 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Asura Online - Perfect Classic Edition</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        body { margin: 0; background: #0f172a; overflow: hidden; touch-action: none; font-family: Tahoma, sans-serif; user-select: none; }
-        
-        #ui-top-left { position: fixed; top: 8px; left: 8px; background: linear-gradient(to bottom, rgba(30,41,59,0.95), rgba(15,23,42,0.95)); border: 2px solid #f59e0b; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 10px; z-index: 20; width: 220px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
-        .bar-container { background: #020617; height: 7px; border-radius: 3px; margin-top: 3px; position: relative; overflow: hidden; border: 1px solid #334155; }
-        #hp-bar { background: linear-gradient(to right, #ef4444, #dc2626); width: 100%; height: 100%; transition: width 0.3s; }
-        #sp-bar { background: linear-gradient(to right, #3b82f6, #2563eb); width: 100%; height: 100%; transition: width 0.3s; }
-        #exp-bar { background: linear-gradient(to right, #10b981, #059669); width: 0%; height: 100%; transition: width 0.3s; }
-        
-        #minimap { position: fixed; top: 8px; right: 8px; width: 100px; height: 80px; background: rgba(15,23,42,0.95); border: 2px solid #f59e0b; border-radius: 6px; z-index: 20; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-size: 8px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
-
-        #target-hud { position: fixed; top: 95px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,0.9); border: 2px solid #ef4444; border-radius: 4px; padding: 4px 10px; color: #fff; font-size: 10px; z-index: 20; display: none; text-align: center; }
-
-        #chat-container { position: fixed; bottom: 48px; left: 8px; width: 260px; height: 85px; background: rgba(15,23,42,0.85); border: 1px solid #475569; border-radius: 6px; padding: 4px; z-index: 25; display: flex; flex-direction: column; justify-content: flex-end; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        #chat-box { font-size: 9px; color: #f8fafc; overflow-y: auto; max-height: 55px; margin-bottom: 3px; word-break: break-all; }
-        #chat-input-row { display: flex; gap: 4px; }
-        #chat-input { flex: 1; background: rgba(255,255,255,0.95); border: none; border-radius: 3px; padding: 3px 6px; font-size: 9px; outline: none; }
-        #chat-send { background: #2563eb; color: #fff; border: none; border-radius: 3px; padding: 3px 8px; font-size: 9px; cursor: pointer; font-weight: bold; }
-
-        #joystick { position: fixed; bottom: 145px; left: 15px; width: 100px; height: 100px; background: rgba(255,255,255,0.06); border: 2px solid rgba(245,158,11,0.3); border-radius: 50%; z-index: 25; display: flex; align-items: center; justify-content: center; touch-action: none; }
-        #knob { width: 40px; height: 40px; background: radial-gradient(circle, rgba(245,158,11,0.8), rgba(217,119,6,0.9)); border-radius: 50%; position: absolute; pointer-events: none; }
-
-        #action-btn { position: fixed; bottom: 48px; right: 15px; width: 70px; height: 70px; background: radial-gradient(circle, #ef4444, #991b1b); border: 3px solid #f87171; border-radius: 50%; z-index: 25; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: bold; box-shadow: 0 5px 15px rgba(239,68,68,0.5); cursor: pointer; }
-        #skill-btn { position: fixed; bottom: 125px; right: 25px; width: 55px; height: 55px; background: radial-gradient(circle, #3b82f6, #1e40af); border: 2px solid #60a5fa; border-radius: 50%; z-index: 25; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: bold; box-shadow: 0 5px 15px rgba(59,130,246,0.5); cursor: pointer; }
-
-        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 290px; background: #1e293b; border: 2px solid #f59e0b; border-radius: 8px; padding: 14px; color: #fff; z-index: 100; font-size: 11px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
-        .modal h3 { margin: 0 0 10px 0; color: #fbbf24; font-size: 13px; text-align: center; border-bottom: 1px solid #475569; padding-bottom: 6px; }
-        .modal-close { position: absolute; top: 8px; right: 10px; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 13px; }
-        .stat-row { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px; }
-        .stat-btn { background: #10b981; border: none; color: #fff; font-weight: bold; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
-        .item-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.04); padding: 6px; border-radius: 4px; margin-bottom: 5px; }
-        .equip-btn { background: #f59e0b; border: none; color: #000; font-weight: bold; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 9px; }
-        .use-btn { background: #ef4444; border: none; color: #fff; font-weight: bold; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 9px; }
-
-        #bottom-menu { position: fixed; bottom: 0; left: 0; right: 0; height: 38px; background: linear-gradient(to top, #090d16, #1e293b); border-top: 2px solid #f59e0b; display: flex; align-items: center; justify-content: space-around; z-index: 20; padding: 0 2px; }
-        .menu-btn { background: linear-gradient(to bottom, #334155, #1e293b); color: #fbbf24; border: 1px solid #64748b; border-radius: 4px; padding: 4px 8px; font-size: 9px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
-    </style>
-</head>
-<body>
-
-    <div id="ui-top-left">
-        <div><b>[<span id="ui-job">Novice</span>]</b> <span id="ui-name">Hero</span> | <span style="color:#fbbf24;">LV. <span id="ui-lvl">1</span></span></div>
-        <div style="font-size:9px; color:#94a3b8; margin-top:2px;">HP: <span id="ui-hp">100</span>/<span id="ui-mhp">100</span></div>
-        <div class="bar-container"><div id="hp-bar"></div></div>
-        <div style="font-size:9px; color:#94a3b8; margin-top:2px;">SP: <span id="ui-sp">50</span>/<span id="ui-msp">50</span></div>
-        <div class="bar-container"><div id="sp-bar"></div></div>
-        <div style="font-size:9px; color:#34d399; margin-top:2px;">EXP: <span id="ui-exp">0</span>%</div>
-        <div class="bar-container"><div id="exp-bar"></div></div>
-    </div>
-
-    <div id="minimap">📍 Prontera Field<br>(Classic PC)</div>
-
-    <div id="target-hud">🎯 เป้าหมาย: <span id="target-name">ไม่มี</span></div>
-
-    <div id="chat-container">
-        <div id="chat-box">
-            <div>[ระบบ]: โหมดตัวละครคลาสสิกสไตล์ PC พร้อมลุย!</div>
-        </div>
-        <div id="chat-input-row">
-            <input type="text" id="chat-input" placeholder="พิมพ์แชทโลก...">
-            <button id="chat-send" onclick="sendChat()">ส่ง</button>
-        </div>
-    </div>
-
-    <div id="joystick"><div id="knob"></div></div>
-    <div id="skill-btn" onclick="useSkill()">⚡ Bash</div>
-    <div id="action-btn" onclick="triggerAttack()">⚔️ ตี</div>
-
-    <div id="inventory-modal" class="modal">
-        <span class="modal-close" onclick="toggleModal('inventory-modal')">X</span>
-        <h3>📦 ช่องเก็บของ & แฟชั่น</h3>
-        <div id="inventory-list" style="max-height: 160px; overflow-y: auto;"></div>
-    </div>
-
-    <div id="stat-modal" class="modal">
-        <span class="modal-close" onclick="toggleModal('stat-modal')">X</span>
-        <h3>📊 สถานะตัวละคร (Status)</h3>
-        <div>แต้มสเตตัสคงเหลือ: <span id="stat-point" style="color:#34d399; font-weight:bold;">0</span></div>
-        <hr style="border-color:#475569; margin:6px 0;">
-        <div class="stat-row"><span>STR: <b id="val-str">1</b></span> <button class="stat-btn" onclick="upgradeStat('str')">+</button></div>
-        <div class="stat-row"><span>AGI: <b id="val-agi">1</b></span> <button class="stat-btn" onclick="upgradeStat('agi')">+</button></div>
-        <div class="stat-row"><span>VIT: <b id="val-vit">1</b></span> <button class="stat-btn" onclick="upgradeStat('vit')">+</button></div>
-        <div class="stat-row"><span>INT: <b id="val-int">1</b></span> <button class="stat-btn" onclick="upgradeStat('int')">+</button></div>
-        <div class="stat-row"><span>DEX: <b id="val-dex">1</b></span> <button class="stat-btn" onclick="upgradeStat('dex')">+</button></div>
-        <div class="stat-row"><span>LUK: <b id="val-luk">1</b></span> <button class="stat-btn" onclick="upgradeStat('luk')">+</button></div>
-    </div>
-
-    <div id="skill-modal" class="modal">
-        <span class="modal-close" onclick="toggleModal('skill-modal')">X</span>
-        <h3>⚡ ทักษะสกิล (Skills)</h3>
-        <div style="background:rgba(255,255,255,0.04); padding:6px; border-radius:4px;">
-            <b>1. Bash (Lv. 1)</b><br><span style="color:#94a3b8; font-size:9px;">ทุบโจมตีรุนแรง</span>
-        </div>
-    </div>
-
-    <div id="bottom-menu">
-        <button class="menu-btn" onclick="toggleModal('inventory-modal')">📦 กระเป๋า</button>
-        <button class="menu-btn" onclick="toggleModal('stat-modal')">📊 สเตตัส</button>
-        <button class="menu-btn" onclick="toggleModal('skill-modal')">⚡ สกิล</button>
-        <button class="menu-btn" onclick="alert('ปาร์ตี้ เร็วๆ นี้')">👥 ปาร์ตี้</button>
-        <button class="menu-btn" onclick="alert('ตั้งค่าเสียงเปิดอยู่')">⚙️ เสียงเปิด</button>
-    </div>
-
-<script>
-let globalSocket = null;
-let myPlayerData = null;
-let selectedTarget = null;
-
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(type) {
-    if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-    let osc = audioCtx.createOscillator();
-    let gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    
-    let now = audioCtx.currentTime;
-    if (type === 'hit') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
-        osc.start(now); osc.stop(now + 0.15);
-    } else if (type === 'potion') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now); osc.stop(now + 0.3);
-    } else if (type === 'levelup') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.setValueAtTime(600, now + 0.1);
-        osc.frequency.setValueAtTime(900, now + 0.2);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
-        osc.start(now); osc.stop(now + 0.4);
-    }
-}
-
-class GameScene extends Phaser.Scene {
-    constructor() { super('GameScene'); }
-    
-    preload() {
-        this.load.image('bg', 'https://labs.phaser.io/assets/skies/space3.png');
-    }
-
-    create() {
-        this.add.tileSprite(0, 0, 5000, 5000, 'bg').setAlpha(0.6);
-
-        this.socket = io();
-        globalSocket = this.socket;
-        
-        this.otherPlayers = this.physics.add.group();
-        this.monstersGroup = this.physics.add.group();
-        this.moveDir = { x: 0, y: 0 };
-        this.cameras.main.setZoom(1.5);
-
-        this.socket.on('currentPlayers', (players) => {
-            Object.keys(players).forEach(id => {
-                if (id === this.socket.id) {
-                    myPlayerData = players[id];
-                    this.addPlayer(players[id]);
-                    updateUI();
-                } else {
-                    this.addOther(players[id]);
-                }
-            });
-        });
-
-        this.socket.on('currentMonsters', (monsters) => {
-            Object.keys(monsters).forEach(id => this.addMonster(monsters[id]));
-        });
-
-        this.socket.on('newPlayer', (p) => this.addOther(p));
-        this.socket.on('disconnectPlayer', (id) => {
-            this.otherPlayers.getChildren().forEach(o => {
-                if (o.playerId === id) {
-                    if(o.shadow) o.shadow.destroy();
-                    o.destroy();
-                }
-            });
-        });
-
-        this.socket.on('playerMoved', (p) => {
-            this.otherPlayers.getChildren().forEach(o => {
-                if (o.playerId === p.id) {
-                    o.setPosition(p.x, p.y);
-                    if (o.shadow) o.shadow.setPosition(p.x, p.y + 18);
-                    if (o.nameText) o.nameText.setPosition(p.x, p.y - 38);
-                }
-            });
-        });
-
-        this.socket.on('playerEquipChanged', (data) => {
-            if (data.id === this.socket.id && this.ship) {
-                this.updatePlayerCostume(this.ship, data.equipment);
-            } else {
-                this.otherPlayers.getChildren().forEach(o => {
-                    if (o.playerId === data.id) this.updatePlayerCostume(o, data.equipment);
-                });
-            }
-        });
-
-        this.socket.on('updateStatsData', (p) => { myPlayerData = p; updateUI(); });
-        this.socket.on('playerDataUpdated', (p) => { myPlayerData = p; updateUI(); });
-        this.socket.on('updateInventory', (inv) => { if (myPlayerData) myPlayerData.inventory = inv; updateInventoryUI(); });
-
-        this.socket.on('monsterDamaged', (data) => {
-            playSound('hit');
-            this.monstersGroup.getChildren().forEach(m => {
-                if (m.monsterId === data.monsterId) showFloatingText(m.x, m.y - 20, `-${data.damage}`, '#ef4444');
-            });
-        });
-
-        this.socket.on('monsterDead', (data) => {
-            this.monstersGroup.getChildren().forEach(m => {
-                if (m.monsterId === data.monsterId) {
-                    showFloatingText(m.x, m.y - 20, `+${data.exp} EXP`, '#34d399');
-                    if (selectedTarget && selectedTarget.monsterId === data.monsterId) { clearTarget(); }
-                    m.destroy();
-                }
-            });
-            if (data.killerId === this.socket.id) {
-                myPlayerData = data.player;
-                if (data.leveledUp) { playSound('levelup'); }
-                updateUI();
-            }
-        });
-
-        this.socket.on('monsterRespawn', (m) => this.addMonster(m));
-
-        this.socket.on('chatMessage', (data) => {
-            let box = document.getElementById('chat-box');
-            box.innerHTML += `<div><b>${data.name}:</b> ${data.msg}</div>`;
-            box.scrollTop = box.scrollHeight;
-        });
-
-        let joy = document.getElementById('joystick'), knob = document.getElementById('knob');
-        let active = false, maxD = 35;
-
-        joy.onpointerdown = () => { active = true; };
-        window.onpointermove = (e) => {
-            if (!active) return;
-            let rect = joy.getBoundingClientRect();
-            let dx = e.clientX - (rect.left + rect.width / 2);
-            let dy = e.clientY - (rect.top + rect.height / 2);
-            let dist = Math.hypot(dx, dy);
-            if (dist > maxD) { dx = (dx/dist)*maxD; dy = (dy/dist)*maxD; }
-            knob.style.transform = `translate(${dx}px, ${dy}px)`;
-            this.moveDir.x = dx / maxD;
-            this.moveDir.y = dy / maxD;
-        };
-        window.onpointerup = () => {
-            active = false;
-            knob.style.transform = `translate(0px, 0px)`;
-            this.moveDir.x = 0; this.moveDir.y = 0;
-        };
-    }
-
     addPlayer(p) {
-        this.shipShadow = this.add.ellipse(p.x, p.y + 18, 20, 8, 0x000000, 0.4);
+        this.shipShadow = this.add.ellipse(p.x, p.y + 18, 22, 9, 0x000000, 0.4);
         
-        // สร้างตัวละคร Novice ด้วยกราฟิกพิกเซลจำลอง
+        // ดีไซน์ตัวละคร Novice คลาสสิก: ผมสีน้ำตาล, ผ้าผูกคอสีฟ้า, ชุดคลุมสีเขียว
         this.ship = this.add.container(p.x, p.y);
-        let body = this.add.rectangle(0, 0, 22, 32, 0xfbbf24).setStrokeStyle(2, 0xffffff);
-        let head = this.add.circle(0, -18, 9, 0xffdead);
-        this.ship.add([body, head]);
+        
+        let body = this.add.rectangle(0, 4, 22, 26, 0xa3e635).setStrokeStyle(2, 0x3f6212); // ชุดคลุมสีเขียว
+        let collar = this.add.triangle(0, -6, -8, -4, 8, -4, 0, 2, 0x38bdf8); // ผ้าผูกคอสีฟ้า
+        let head = this.add.circle(0, -16, 11, 0xffdead).setStrokeStyle(1, 0xd4b28c); // ใบหน้า
+        let hair = this.add.ellipse(0, -22, 16, 10, 0x78350f); // ผมทรงโนวิซสีน้ำตาล
+        let eyeLeft = this.add.circle(-3, -16, 1.5, 0x000000);
+        let eyeRight = this.add.circle(3, -16, 1.5, 0x000000);
+
+        this.ship.add([body, collar, head, hair, eyeLeft, eyeRight]);
         
         this.physics.world.enable(this.ship);
         this.ship.body.setCollideWorldBounds(true);
         this.ship.body.setSize(22, 32);
 
         this.cameras.main.startFollow(this.ship, true, 0.1, 0.1);
-        this.nameText = this.add.text(p.x, p.y - 38, `${p.name} (You)`, { fontSize: '10px', fill: '#fbbf24', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+        this.nameText = this.add.text(p.x, p.y - 40, `${p.name} (You)`, { fontSize: '10px', fill: '#fbbf24', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     }
 
     addOther(p) {
-        let shadow = this.add.ellipse(p.x, p.y + 18, 20, 8, 0x000000, 0.4);
+        let shadow = this.add.ellipse(p.x, p.y + 18, 22, 9, 0x000000, 0.4);
         let o = this.add.container(p.x, p.y);
-        let body = this.add.rectangle(0, 0, 22, 32, 0x38bdf8).setStrokeStyle(2, 0xffffff);
-        let head = this.add.circle(0, -18, 9, 0xffdead);
-        o.add([body, head]);
+        
+        let body = this.add.rectangle(0, 4, 22, 26, 0x38bdf8).setStrokeStyle(2, 0x0369a1); // ผู้เล่นอื่นใส่ชุดฟ้า
+        let collar = this.add.triangle(0, -6, -8, -4, 8, -4, 0, 2, 0xfacc15);
+        let head = this.add.circle(0, -16, 11, 0xffdead);
+        let hair = this.add.ellipse(0, -22, 16, 10, 0x451a03);
+        let eyeLeft = this.add.circle(-3, -16, 1.5, 0x000000);
+        let eyeRight = this.add.circle(3, -16, 1.5, 0x000000);
+
+        o.add([body, collar, head, hair, eyeLeft, eyeRight]);
         
         o.playerId = p.id;
         o.shadow = shadow;
         this.otherPlayers.add(o);
-        o.nameText = this.add.text(p.x, p.y - 38, p.name, { fontSize: '9px', fill: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+        o.nameText = this.add.text(p.x, p.y - 40, p.name, { fontSize: '9px', fill: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     }
 
     updatePlayerCostume(spriteObj, eq) {
         if (eq && eq.head) {
             if (!spriteObj.hat) {
-                // สร้างหมวกกระต่ายจำลองด้วยวงรีสีชมพูเหนือหัว
-                spriteObj.hat = this.add.ellipse(0, -30, 16, 12, 0xff9f43).setStrokeStyle(1, 0xffffff);
+                // หมวกกระต่ายแฟชั่นวางทับบนผมพอดี
+                spriteObj.hat = this.add.ellipse(0, -30, 18, 12, 0xf472b6).setStrokeStyle(1, 0xffffff);
                 spriteObj.add(spriteObj.hat);
             }
         } else if (spriteObj.hat) {
@@ -310,148 +52,3 @@ class GameScene extends Phaser.Scene {
             spriteObj.hat = null;
         }
     }
-
-    addMonster(m) {
-        // สร้างมอนสเตอร์ Poring สีชมพูกลมดุ๊กดิ๊กด้วยกราฟิกโค้ด
-        let monsterSprite = this.add.container(m.x, m.y);
-        let body = this.add.circle(0, 0, 14, 0xf472b6).setStrokeStyle(2, 0xffffff);
-        let eye1 = this.add.circle(-4, -2, 2, 0x000000);
-        let eye2 = this.add.circle(4, -2, 2, 0x000000);
-        monsterSprite.add([body, eye1, eye2]);
-        
-        monsterSprite.monsterId = m.id;
-        this.physics.world.enable(monsterSprite);
-        monsterSprite.body.setCircle(14, -14, -14);
-        monsterSprite.setInteractive(new Phaser.Geom.Circle(0, 0, 16), Phaser.Geom.Circle.Contains);
-        
-        monsterSprite.on('pointerdown', () => {
-            selectedTarget = monsterSprite;
-            document.getElementById('target-hud').style.display = 'block';
-            document.getElementById('target-name').innerText = `${m.name} [Lv.${m.level}]`;
-        });
-
-        this.monstersGroup.add(monsterSprite);
-        this.add.text(m.x, m.y - 22, `${m.name} [Lv.${m.level}]`, { fontSize: '9px', fill: '#f87171', stroke: '#000', strokeThickness: 2 }).setOrigin(0.5);
-    }
-
-    doAttack() {
-        if (this.ship) {
-            this.tweens.add({ targets: this.ship, scaleX: 1.2, scaleY: 0.8, duration: 80, yoyo: true });
-
-            if (selectedTarget && selectedTarget.active) {
-                let dist = Phaser.Math.Distance.Between(this.ship.x, this.ship.y, selectedTarget.x, selectedTarget.y);
-                if (dist <= 120 && globalSocket) {
-                    globalSocket.emit('attackMonster', selectedTarget.monsterId);
-                } else {
-                    showFloatingText(this.ship.x, this.ship.y - 50, 'เป้าหมายอยู่ไกลเกินไป!', '#fbbf24');
-                }
-            } else {
-                let nearestMonster = null;
-                let minDist = 90;
-                this.monstersGroup.getChildren().forEach(m => {
-                    let dist = Phaser.Math.Distance.Between(this.ship.x, this.ship.y, m.x, m.y);
-                    if (dist < minDist) { minDist = dist; nearestMonster = m; }
-                });
-                if (nearestMonster && globalSocket) {
-                    globalSocket.emit('attackMonster', nearestMonster.monsterId);
-                }
-            }
-        }
-    }
-
-    update() {
-        if (this.ship && this.ship.body) {
-            let speed = 180;
-            this.ship.body.setVelocity(this.moveDir.x * speed, this.moveDir.y * speed);
-
-            if (this.shipShadow) { this.shipShadow.setPosition(this.ship.x, this.ship.y + 18); }
-            if (this.nameText) { this.nameText.setPosition(this.ship.x, this.ship.y - 38); }
-
-            if (this.moveDir.x !== 0 || this.moveDir.y !== 0) {
-                this.socket.emit('playerMovement', { x: this.ship.x, y: this.ship.y });
-            }
-        }
-    }
-}
-
-function clearTarget() {
-    selectedTarget = null;
-    document.getElementById('target-hud').style.display = 'none';
-}
-
-function updateUI() {
-    if (!myPlayerData) return;
-    document.getElementById('ui-name').innerText = myPlayerData.name;
-    document.getElementById('ui-lvl').innerText = myPlayerData.lvl;
-    document.getElementById('ui-hp').innerText = myPlayerData.hp;
-    document.getElementById('ui-mhp').innerText = myPlayerData.maxHp;
-    document.getElementById('ui-sp').innerText = myPlayerData.sp;
-    document.getElementById('ui-msp').innerText = myPlayerData.maxSp;
-    
-    let expPercent = Math.floor((myPlayerData.exp / myPlayerData.maxExp) * 100);
-    document.getElementById('ui-exp').innerText = expPercent;
-    document.getElementById('exp-bar').style.width = expPercent + '%';
-    document.getElementById('hp-bar').style.width = Math.floor((myPlayerData.hp / myPlayerData.maxHp) * 100) + '%';
-    document.getElementById('sp-bar').style.width = Math.floor((myPlayerData.sp / myPlayerData.maxSp) * 100) + '%';
-
-    document.getElementById('stat-point').innerText = myPlayerData.stats.statPoint;
-    document.getElementById('val-str').innerText = myPlayerData.stats.str;
-    document.getElementById('val-agi').innerText = myPlayerData.stats.agi;
-    document.getElementById('val-vit').innerText = myPlayerData.stats.vit;
-    document.getElementById('val-int').innerText = myPlayerData.stats.int;
-    document.getElementById('val-dex').innerText = myPlayerData.stats.dex;
-    document.getElementById('val-luk').innerText = myPlayerData.stats.luk;
-    
-    updateInventoryUI();
-}
-
-function updateInventoryUI() {
-    if (!myPlayerData || !myPlayerData.inventory) return;
-    let listEl = document.getElementById('inventory-list');
-    listEl.innerHTML = '';
-    myPlayerData.inventory.forEach(item => {
-        let actionBtn = '';
-        if (item.type === 'consumable') {
-            actionBtn = `<button class="use-btn" onclick="useItem('${item.id}')">ใช้</button>`;
-        } else if (item.type === 'costume') {
-            actionBtn = `<button class="equip-btn" onclick="equipItem('${item.id}')">สวมใส่</button>`;
-        }
-        listEl.innerHTML += `<div class="item-row"><span>${item.name} (${item.count})</span> ${actionBtn}</div>`;
-    });
-}
-
-function toggleModal(id) {
-    let modal = document.getElementById(id);
-    modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
-}
-
-function upgradeStat(statName) { if (globalSocket) globalSocket.emit('upgradeStat', statName); }
-function useItem(itemId) { playSound('potion'); if (globalSocket) globalSocket.emit('useItem', itemId); }
-function equipItem(itemId) { if (globalSocket) globalSocket.emit('equipItem', itemId); }
-function useSkill() { triggerAttack(); }
-function triggerAttack() { if (game.scene.scenes[0]) game.scene.scenes[0].doAttack(); }
-
-function sendChat() {
-    let input = document.getElementById('chat-input');
-    if (input.value.trim() !== '' && globalSocket) {
-        globalSocket.emit('chatMessage', input.value);
-        input.value = '';
-    }
-}
-
-function showFloatingText(x, y, message, color) {
-    let scene = game.scene.scenes[0];
-    let txt = scene.add.text(x, y, message, { fontSize: '11px', fill: color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
-    scene.tweens.add({ targets: txt, y: y - 30, alpha: 0, duration: 900, onComplete: () => txt.destroy() });
-}
-
-const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    physics: { default: 'arcade', arcade: { debug: false } },
-    scene: GameScene
-});
-</script>
-</body>
-</html>

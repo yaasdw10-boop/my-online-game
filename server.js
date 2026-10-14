@@ -10,9 +10,9 @@ app.use(express.static('public'));
 
 let players = {};
 let monsters = {
-    1: { id: 1, name: 'Poring', x: 300, y: 300, hp: 30, maxHp: 30, level: 1 },
-    2: { id: 2, name: 'Poring', x: 600, y: 400, hp: 30, maxHp: 30, level: 1 },
-    3: { id: 3, name: 'Drops', x: 500, y: 200, hp: 45, maxHp: 45, level: 2 }
+    1: { id: 1, name: 'Poring', type: 'poring', x: 300, y: 300, hp: 30, maxHp: 30, level: 1, exp: 25 },
+    2: { id: 2, name: 'Drops', type: 'drops', x: 600, y: 400, hp: 45, maxHp: 45, level: 2, exp: 40 },
+    3: { id: 3, name: 'Lunatic', type: 'lunatic', x: 500, y: 200, hp: 60, maxHp: 60, level: 3, exp: 60 }
 };
 
 io.on('connection', (socket) => {
@@ -20,21 +20,22 @@ io.on('connection', (socket) => {
 
     players[socket.id] = {
         id: socket.id,
-        name: 'Novice_' + Math.floor(Math.random() * 1000),
+        name: 'Hero_' + Math.floor(Math.random() * 1000),
         x: 400,
         y: 300,
-        hp: 100,
-        maxHp: 100,
-        sp: 50,
-        maxSp: 50,
+        hp: 120,
+        maxHp: 120,
+        sp: 60,
+        maxSp: 60,
         lvl: 1,
         exp: 0,
         maxExp: 100,
         job: 'Novice',
-        stats: { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1, statPoint: 0 },
+        stats: { str: 5, agi: 5, vit: 5, int: 5, dex: 5, luk: 5, statPoint: 0 },
         equipment: { head: null, costume: 'default' },
         inventory: [
-            { id: 'hp_potion', name: 'Red Potion (ฟื้น HP 50)', count: 5, type: 'consumable' },
+            { id: 'hp_potion', name: 'Red Potion (ฟื้น HP 50)', count: 10, type: 'consumable' },
+            { id: 'sp_potion', name: 'Blue Potion (ฟื้น SP 30)', count: 5, type: 'consumable' },
             { id: 'hat_bunny', name: '🐰 หมวกกระต่ายแฟชั่น', count: 1, type: 'costume', slot: 'head', sprite: 'bunny' }
         ]
     };
@@ -52,16 +53,18 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('attackMonster', (monsterId) => {
+    socket.on('attackMonster', (data) => {
         let player = players[socket.id];
-        let monster = monsters[monsterId];
+        let monster = monsters[data.monsterId];
         if (player && monster && monster.hp > 0) {
-            let damage = 10 + player.stats.str * 2;
+            let baseDmg = 12 + player.stats.str * 2.5;
+            if (data.isSkill) baseDmg *= 1.8; // สกิลแรงขึ้น
+            let damage = Math.floor(baseDmg);
             monster.hp -= damage;
 
             if (monster.hp <= 0) {
                 monster.hp = 0;
-                player.exp += 35;
+                player.exp += monster.exp;
                 
                 let invItem = player.inventory.find(i => i.id === 'hp_potion');
                 if (invItem) { invItem.count++; } else { player.inventory.push({ id: 'hp_potion', name: 'Red Potion', count: 1, type: 'consumable' }); }
@@ -70,24 +73,26 @@ io.on('connection', (socket) => {
                 if (player.exp >= player.maxExp) {
                     player.lvl++;
                     player.exp = 0;
-                    player.maxExp = Math.floor(player.maxExp * 1.5);
-                    player.maxHp += 25;
+                    player.maxExp = Math.floor(player.maxExp * 1.4);
+                    player.maxHp += 30;
                     player.hp = player.maxHp;
+                    player.maxSp += 15;
+                    player.sp = player.maxSp;
                     player.stats.statPoint += 5;
                     leveledUp = true;
                 }
 
-                io.emit('monsterDead', { monsterId: monsterId, killerId: socket.id, exp: 35, leveledUp: leveledUp, player: player });
+                io.emit('monsterDead', { monsterId: data.monsterId, killerId: socket.id, exp: monster.exp, leveledUp: leveledUp, player: player });
                 socket.emit('updateInventory', player.inventory);
 
                 setTimeout(() => {
                     monster.hp = monster.maxHp;
-                    monster.x = Math.random() * 600 + 200;
-                    monster.y = Math.random() * 600 + 200;
+                    monster.x = Math.random() * 700 + 150;
+                    monster.y = Math.random() * 500 + 150;
                     io.emit('monsterRespawn', monster);
                 }, 4000);
             } else {
-                io.emit('monsterDamaged', { monsterId: monsterId, hp: monster.hp, damage: damage });
+                io.emit('monsterDamaged', { monsterId: data.monsterId, hp: monster.hp, damage: damage });
             }
         }
     });
@@ -95,14 +100,11 @@ io.on('connection', (socket) => {
     socket.on('equipItem', (itemId) => {
         let player = players[socket.id];
         if (!player) return;
-        let itemIndex = player.inventory.findIndex(i => i.id === itemId);
-        if (itemIndex > -1) {
-            let item = player.inventory[itemIndex];
-            if (item.type === 'costume' && item.slot === 'head') {
-                player.equipment.head = item.sprite;
-                io.emit('playerEquipChanged', { id: socket.id, equipment: player.equipment });
-                socket.emit('playerDataUpdated', player);
-            }
+        let item = player.inventory.find(i => i.id === itemId);
+        if (item && item.type === 'costume') {
+            player.equipment.head = player.equipment.head === item.sprite ? null : item.sprite;
+            io.emit('playerEquipChanged', { id: socket.id, equipment: player.equipment });
+            socket.emit('playerDataUpdated', player);
         }
     });
 
@@ -110,8 +112,12 @@ io.on('connection', (socket) => {
         let player = players[socket.id];
         if (!player) return;
         let item = player.inventory.find(i => i.id === itemId);
-        if (item && item.count > 0 && itemId === 'hp_potion') {
-            player.hp = Math.min(player.maxHp, player.hp + 50);
+        if (item && item.count > 0) {
+            if (itemId === 'hp_potion') {
+                player.hp = Math.min(player.maxHp, player.hp + 50);
+            } else if (itemId === 'sp_potion') {
+                player.sp = Math.min(player.maxSp, player.sp + 30);
+            }
             item.count--;
             if (item.count <= 0) {
                 player.inventory = player.inventory.filter(i => i.id !== itemId);

@@ -1,60 +1,79 @@
-    addPlayer(p) {
-        this.shipShadow = this.add.ellipse(p.x, p.y + 18, 24, 10, 0x000000, 0.5);
-        this.ship = this.add.container(p.x, p.y);
-        
-        // วาดตัวละคร Novice / Warrior แบบ Pixel Art ละเอียด
-        let cape = this.add.rectangle(0, 6, 20, 22, 0x1d4ed8); // ผ้าคลุม
-        let body = this.add.rectangle(0, 4, 18, 20, 0x3b82f6); // ตัวชุดเกราะฟ้า
-        let armorPlate = this.add.rectangle(0, 0, 14, 12, 0x93c5fd); // เกราะอก
-        let head = this.add.circle(0, -14, 10, 0xffdead).setStrokeStyle(1, 0xc58b65); // หน้า
-        let hair = this.add.rectangle(0, -22, 14, 8, 0x78350f, 1); // ผมน้ำตาล
-        let hairBang1 = this.add.rectangle(-4, -18, 4, 6, 0x78350f);
-        let eyeLeft = this.add.rectangle(-3, -14, 2, 3, 0x000000); // ตาซ้าย
-        let eyeRight = this.add.rectangle(3, -14, 2, 3, 0x000000); // ตาขวา
-        let sword = this.add.rectangle(12, 2, 3, 14, 0xe2e8f0).setAngle(15); // ดาบข้างตัว
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Asura Online - PC Client Edition</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
 
-        this.ship.add([cape, body, armorPlate, head, hair, hairBang1, eyeLeft, eyeRight, sword]);
-        
-        this.physics.world.enable(this.ship);
-        this.ship.body.setCollideWorldBounds(true);
-        this.ship.body.setSize(20, 30);
+    <!-- แถบเมนูด้านบนสไตล์ PC MMORPG -->
+    <div id="asura-top-bar">
+        <div class="top-left-info">
+            <div class="player-title"><span id="ui-name">Hero</span> <span style="color:#f6e05e;">[LV.<span id="ui-lvl">1</span>]</span></div>
+            <div class="bar-label">HP: <span id="ui-hp">150</span>/<span id="ui-mhp">150</span></div>
+            <div class="asura-bar-bg"><div id="hp-bar"></div></div>
+            <div class="bar-label">SP: <span id="ui-sp">80</span>/<span id="ui-msp">80</span></div>
+            <div class="asura-bar-bg"><div id="sp-bar"></div></div>
+        </div>
+        <div class="top-skills">
+            <div class="skill-slot" onclick="useActiveSkill()">F1</div>
+            <div class="skill-slot" onclick="useActiveSkill()">F2</div>
+            <div class="skill-slot" onclick="useActiveSkill()">F3</div>
+            <div class="skill-slot" onclick="useItem('hp_potion')">💊</div>
+            <div class="skill-slot" onclick="useItem('sp_potion')">🧪</div>
+        </div>
+    </div>
 
-        this.cameras.main.startFollow(this.ship, true, 0.1, 0.1);
-        this.nameText = this.add.text(p.x, p.y - 42, `${p.name} (You)`, { fontSize: '10px', fill: '#ecc94b', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
-    }
+    <div id="minimap">📍 Prontera Field<br>(PC Engine)</div>
+    <div id="target-hud">🎯 เป้าหมาย: <span id="target-name">ไม่มี</span></div>
 
-    addOther(p) {
-        let shadow = this.add.ellipse(p.x, p.y + 18, 24, 10, 0x000000, 0.5);
-        let o = this.add.container(p.x, p.y);
-        
-        let cape = this.add.rectangle(0, 6, 20, 22, 0x047857);
-        let body = this.add.rectangle(0, 4, 18, 20, 0x10b981);
-        let armorPlate = this.add.rectangle(0, 0, 14, 12, 0x6ee7b7);
-        let head = this.add.circle(0, -14, 10, 0xffdead).setStrokeStyle(1, 0xc58b65);
-        let hair = this.add.rectangle(0, -22, 14, 8, 0x111827, 1);
-        let hairBang1 = this.add.rectangle(-4, -18, 4, 6, 0x111827);
-        let eyeLeft = this.add.rectangle(-3, -14, 2, 3, 0x000000);
-        let eyeRight = this.add.rectangle(3, -14, 2, 3, 0x000000);
+    <!-- กล่องแชท -->
+    <div id="chat-container">
+        <div id="chat-box"><div>[ระบบ]: เริ่มต้นระบบ Client แบบแยกโมดูลสำเร็จ</div></div>
+        <div id="chat-input-row">
+            <input type="text" id="chat-input" placeholder="พิมพ์ข้อความ...">
+            <button id="chat-send" onclick="sendChat()">ส่ง</button>
+        </div>
+    </div>
 
-        o.add([cape, body, armorPlate, head, hair, hairBang1, eyeLeft, eyeRight]);
-        o.playerId = p.id;
-        o.shadow = shadow;
-        this.otherPlayers.add(o);
-        o.nameText = this.add.text(p.x, p.y - 42, p.name, { fontSize: '9px', fill: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
-    }
+    <!-- ปุ่มควบคุมการเคลื่อนไหวและโจมตี -->
+    <div id="joystick"><div id="knob"></div></div>
+    <div id="skill-btn" onclick="useActiveSkill()">⚡ Bash</div>
+    <div id="action-btn" onclick="triggerAttack(false)">⚔️ โจมตี</div>
 
-    updatePlayerCostume(spriteObj, eq) {
-        if (eq && eq.head) {
-            if (!spriteObj.hat) {
-                // วาดหมวกกระต่ายแฟชั่นสไตล์พิกเซลมีหูกระต่ายด้านบน
-                let hatBase = this.add.ellipse(0, -26, 16, 10, 0xf472b6);
-                let earLeft = this.add.rectangle(-4, -35, 4, 10, 0xf472b6);
-                let earRight = this.add.rectangle(4, -35, 4, 10, 0xf472b6);
-                spriteObj.hat = this.add.container(0, 0, [hatBase, earLeft, earRight]);
-                spriteObj.add(spriteObj.hat);
-            }
-        } else if (spriteObj.hat) {
-            spriteObj.hat.destroy();
-            spriteObj.hat = null;
-        }
-    }
+    <!-- Modal หน้าต่างสถานะและไอเท็ม -->
+    <div id="inventory-modal" class="modal">
+        <span class="modal-close" onclick="toggleModal('inventory-modal')">X</span>
+        <h3>📦 ช่องเก็บของ (Inventory)</h3>
+        <div id="inventory-list" style="max-height: 160px; overflow-y: auto;"></div>
+    </div>
+
+    <div id="stat-modal" class="modal">
+        <span class="modal-close" onclick="toggleModal('stat-modal')">X</span>
+        <h3>📊 สถานะตัวละคร (Status)</h3>
+        <div style="font-size:10px; margin-bottom:6px;">แต้มคงเหลือ: <span id="stat-point" style="color:#48bb78; font-weight:bold;">0</span></div>
+        <div class="stat-row"><span>STR: <b id="val-str">6</b></span> <button class="stat-btn" onclick="upgradeStat('str')">+</button></div>
+        <div class="stat-row"><span>AGI: <b id="val-agi">5</b></span> <button class="stat-btn" onclick="upgradeStat('agi')">+</button></div>
+        <div class="stat-row"><span>VIT: <b id="val-vit">5</b></span> <button class="stat-btn" onclick="upgradeStat('vit')">+</button></div>
+        <div class="stat-row"><span>INT: <b id="val-int">5</b></span> <button class="stat-btn" onclick="upgradeStat('int')">+</button></div>
+        <div class="stat-row"><span>DEX: <b id="val-dex">5</b></span> <button class="stat-btn" onclick="upgradeStat('dex')">+</button></div>
+        <div class="stat-row"><span>LUK: <b id="val-luk">5</b></span> <button class="stat-btn" onclick="upgradeStat('luk')">+</button></div>
+    </div>
+
+    <!-- แถบเมนูลัดด้านล่าง -->
+    <div id="asura-bottom-menu">
+        <button class="menu-btn" onclick="toggleModal('inventory-modal')">📦 ไอเท็ม</button>
+        <button class="menu-btn" onclick="toggleModal('stat-modal')">📊 สถานะ</button>
+        <button class="menu-btn" onclick="alert('ระบบสกิลขั้นสูง')">⚡ สกิล</button>
+        <button class="menu-btn" onclick="alert('ระบบเควส')">📜 เควส</button>
+        <button class="menu-btn" onclick="alert('แผนที่โลก')">🗺️ แผนที่</button>
+    </div>
+
+    <script src="js/scenes/GameScene.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

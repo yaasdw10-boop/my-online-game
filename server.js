@@ -9,35 +9,138 @@ const io = new Server(server);
 app.use(express.static('public'));
 
 let players = {};
+let monsters = {
+    1: { id: 1, name: 'Poring', x: 300, y: 300, hp: 30, maxHp: 30, level: 1 },
+    2: { id: 2, name: 'Poring', x: 600, y: 400, hp: 30, maxHp: 30, level: 1 },
+    3: { id: 3, name: 'Drops', x: 500, y: 200, hp: 45, maxHp: 45, level: 2 }
+};
 
 io.on('connection', (socket) => {
-    console.log('มีผู้เล่นเชื่อมต่อ:', socket.id);
+    console.log('ผู้เล่นเชื่อมต่อ:', socket.id);
 
     players[socket.id] = {
         id: socket.id,
+        name: 'Novice_' + Math.floor(Math.random() * 1000),
         x: 400,
-        y: 300
+        y: 300,
+        hp: 100,
+        maxHp: 100,
+        sp: 50,
+        maxSp: 50,
+        lvl: 1,
+        exp: 0,
+        maxExp: 100,
+        job: 'Novice',
+        stats: { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1, statPoint: 0 },
+        equipment: { head: null, costume: 'default' },
+        inventory: [
+            { id: 'hp_potion', name: 'Red Potion (ฟื้น HP 50)', count: 5, type: 'consumable' },
+            { id: 'hat_bunny', name: '🐰 หมวกกระต่ายแฟชั่น', count: 1, type: 'costume', slot: 'head', sprite: 'bunny' }
+        ]
     };
 
     socket.emit('currentPlayers', players);
+    socket.emit('currentMonsters', monsters);
     socket.broadcast.emit('newPlayer', players[socket.id]);
+    socket.emit('updateInventory', players[socket.id].inventory);
 
-    socket.on('playerMovement', (movementData) => {
+    socket.on('playerMovement', (data) => {
         if (players[socket.id]) {
-            players[socket.id].x = movementData.x;
-            players[socket.id].y = movementData.y;
+            players[socket.id].x = data.x;
+            players[socket.id].y = data.y;
             socket.broadcast.emit('playerMoved', players[socket.id]);
         }
     });
 
+    socket.on('attackMonster', (monsterId) => {
+        let player = players[socket.id];
+        let monster = monsters[monsterId];
+        if (player && monster && monster.hp > 0) {
+            let damage = 10 + player.stats.str * 2;
+            monster.hp -= damage;
+
+            if (monster.hp <= 0) {
+                monster.hp = 0;
+                player.exp += 35;
+                
+                let invItem = player.inventory.find(i => i.id === 'hp_potion');
+                if (invItem) { invItem.count++; } else { player.inventory.push({ id: 'hp_potion', name: 'Red Potion', count: 1, type: 'consumable' }); }
+
+                let leveledUp = false;
+                if (player.exp >= player.maxExp) {
+                    player.lvl++;
+                    player.exp = 0;
+                    player.maxExp = Math.floor(player.maxExp * 1.5);
+                    player.maxHp += 25;
+                    player.hp = player.maxHp;
+                    player.stats.statPoint += 5;
+                    leveledUp = true;
+                }
+
+                io.emit('monsterDead', { monsterId: monsterId, killerId: socket.id, exp: 35, leveledUp: leveledUp, player: player });
+                socket.emit('updateInventory', player.inventory);
+
+                setTimeout(() => {
+                    monster.hp = monster.maxHp;
+                    monster.x = Math.random() * 600 + 200;
+                    monster.y = Math.random() * 600 + 200;
+                    io.emit('monsterRespawn', monster);
+                }, 4000);
+            } else {
+                io.emit('monsterDamaged', { monsterId: monsterId, hp: monster.hp, damage: damage });
+            }
+        }
+    });
+
+    socket.on('equipItem', (itemId) => {
+        let player = players[socket.id];
+        if (!player) return;
+        let itemIndex = player.inventory.findIndex(i => i.id === itemId);
+        if (itemIndex > -1) {
+            let item = player.inventory[itemIndex];
+            if (item.type === 'costume' && item.slot === 'head') {
+                player.equipment.head = item.sprite;
+                io.emit('playerEquipChanged', { id: socket.id, equipment: player.equipment });
+                socket.emit('playerDataUpdated', player);
+            }
+        }
+    });
+
+    socket.on('useItem', (itemId) => {
+        let player = players[socket.id];
+        if (!player) return;
+        let item = player.inventory.find(i => i.id === itemId);
+        if (item && item.count > 0 && itemId === 'hp_potion') {
+            player.hp = Math.min(player.maxHp, player.hp + 50);
+            item.count--;
+            if (item.count <= 0) {
+                player.inventory = player.inventory.filter(i => i.id !== itemId);
+            }
+            socket.emit('updateInventory', player.inventory);
+            socket.emit('playerDataUpdated', player);
+        }
+    });
+
+    socket.on('upgradeStat', (statName) => {
+        let p = players[socket.id];
+        if (p && p.stats.statPoint > 0 && p.stats[statName] !== undefined) {
+            p.stats[statName]++;
+            p.stats.statPoint--;
+            socket.emit('updateStatsData', p);
+        }
+    });
+
+    socket.on('chatMessage', (msg) => {
+        if (players[socket.id]) {
+            io.emit('chatMessage', { name: players[socket.id].name, msg: msg });
+        }
+    });
+
     socket.on('disconnect', () => {
-        console.log('ผู้เล่นออกเกม:', socket.id);
         delete players[socket.id];
         io.emit('disconnectPlayer', socket.id);
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log('Server is running on port ' + PORT);
-});
+server.listen(PORT, () => console.log('Server running on port ' + PORT));

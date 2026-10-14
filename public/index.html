@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Online Game Project</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { margin: 0; background: #111; overflow: hidden; touch-action: none; }
+        #joystick { position: fixed; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; z-index: 10; display: flex; align-items: center; justify-content: center; }
+        #knob { width: 50px; height: 50px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; }
+    </style>
+</head>
+<body>
+<div id="joystick"><div id="knob"></div></div>
+
+<script>
+class GameScene extends Phaser.Scene {
+    constructor() { super('GameScene'); }
+    preload() {
+        this.load.image('hero', 'https://labs.phaser.io/assets/sprites/phaser-dude.png');
+        this.load.image('bg', 'https://labs.phaser.io/assets/skies/space3.png');
+    }
+    create() {
+        this.add.image(1000, 1000, 'bg').setScale(4);
+        this.socket = io();
+        this.otherPlayers = this.physics.add.group();
+        this.moveDir = { x: 0, y: 0 };
+
+        this.socket.on('currentPlayers', (players) => {
+            Object.keys(players).forEach(id => {
+                if (id === this.socket.id) this.addPlayer(players[id]);
+                else this.addOther(players[id]);
+            });
+        });
+
+        this.socket.on('newPlayer', (playerInfo) => this.addOther(playerInfo));
+        this.socket.on('disconnectPlayer', (id) => {
+            this.otherPlayers.getChildren().forEach(o => { if (o.playerId === id) o.destroy(); });
+        });
+        this.socket.on('playerMoved', (playerInfo) => {
+            this.otherPlayers.getChildren().forEach(o => {
+                if (o.playerId === playerInfo.id) o.setPosition(playerInfo.x, playerInfo.y);
+            });
+        });
+
+        // ระบบสัมผัสมือถือเบื้องต้น
+        let joy = document.getElementById('joystick'), knob = document.getElementById('knob');
+        let active = false, cx = 60, cy = 60;
+        
+        joy.onpointerdown = (e) => { active = true; };
+        window.onpointermove = (e) => {
+            if (!active) return;
+            let dx = e.clientX - 90, dy = e.clientY - (window.innerHeight - 90);
+            let dist = Math.hypot(dx, dy), maxD = 40;
+            if (dist > maxD) { dx = (dx/dist)*maxD; dy = (dy/dist)*maxD; }
+            knob.style.transform = `translate(${dx}px, ${dy}px)`;
+            this.moveDir.x = dx / maxD;
+            this.moveDir.y = dy / maxD;
+        };
+        window.onpointerup = () => {
+            active = false; knob.style.transform = `translate(0px, 0px)`;
+            this.moveDir.x = 0; this.moveDir.y = 0;
+        };
+    }
+
+    addPlayer(p) {
+        this.ship = this.physics.add.sprite(p.x, p.y, 'hero');
+        this.cameras.main.startFollow(this.ship);
+    }
+    addOther(p) {
+        let o = this.physics.add.sprite(p.x, p.y, 'hero');
+        o.playerId = p.id;
+        this.otherPlayers.add(o);
+    }
+
+    update() {
+        if (this.ship) {
+            let speed = 200;
+            this.ship.setVelocity(this.moveDir.x * speed, this.moveDir.y * speed);
+            if (this.moveDir.x !== 0 || this.moveDir.y !== 0) {
+                this.socket.emit('playerMovement', { x: this.ship.x, y: this.ship.y });
+            }
+        }
+    }
+}
+
+new Phaser.Game({
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    physics: { default: 'arcade' },
+    scene: GameScene
+});
+</script>
+</body>
+</html>

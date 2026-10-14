@@ -3,57 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Online Game Project</title>
+    <title>PC Style MMORPG Online</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { margin: 0; background: #111; overflow: hidden; touch-action: none; }
-        #joystick { position: fixed; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; z-index: 10; display: flex; align-items: center; justify-content: center; }
-        #knob { width: 50px; height: 50px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; }
+        body { margin: 0; background: #0b0f19; overflow: hidden; touch-action: none; font-family: Tahoma, sans-serif; }
+        #joystick { position: fixed; bottom: 30px; left: 30px; width: 130px; height: 130px; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; z-index: 10; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        #knob { width: 55px; height: 55px; background: rgba(255,255,255,0.35); border-radius: 50%; position: absolute; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        #ui-top { position: fixed; top: 10px; left: 10px; color: #fff; font-size: 12px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; border: 1px solid #475569; z-index: 10; pointer-events: none; text-shadow: 1px 1px #000; }
     </style>
 </head>
 <body>
+<div id="ui-top">🏰 Prontera Field | Online Players: <span id="pCount">1</span></div>
 <div id="joystick"><div id="knob"></div></div>
 
 <script>
 class GameScene extends Phaser.Scene {
     constructor() { super('GameScene'); }
+    
     preload() {
-        this.load.image('hero', 'https://labs.phaser.io/assets/sprites/phaser-dude.png');
-        this.load.image('bg', 'https://labs.phaser.io/assets/skies/space3.png');
+        // ใช้ภาพพิกเซลสไตล์เกมคอมพิวเตอร์ (คมชัด ไม่แตกเมื่อซูม)
+        this.load.setBaseURL('https://labs.phaser.io');
+        this.load.image('ground', 'assets/skies/space3.png');
+        this.load.image('hero', 'assets/sprites/phaser-dude.png');
+        this.load.image('monster', 'assets/sprites/ilk.png');
     }
+
     create() {
-        this.add.image(1000, 1000, 'bg').setScale(4);
+        // สร้างพื้นหลังขนาดใหญ่จำลองแมพเกมคอมพิวเตอร์ (Tile แบบทำซ้ำ)
+        this.add.tileSprite(0, 0, 4000, 4000, 'ground').setAlpha(0.8);
+
         this.socket = io();
         this.otherPlayers = this.physics.add.group();
         this.moveDir = { x: 0, y: 0 };
 
+        // ตั้งค่ากล้องให้ซูมและติดตามตัวละครแบบเกม PC (Smooth Camera)
+        this.cameras.main.setZoom(1.2);
+
         this.socket.on('currentPlayers', (players) => {
+            document.getElementById('pCount').innerText = Object.keys(players).length;
             Object.keys(players).forEach(id => {
                 if (id === this.socket.id) this.addPlayer(players[id]);
                 else this.addOther(players[id]);
             });
         });
 
-        this.socket.on('newPlayer', (playerInfo) => this.addOther(playerInfo));
+        this.socket.on('newPlayer', (playerInfo) => {
+            this.addOther(playerInfo);
+            updatePlayerCount();
+        });
+
         this.socket.on('disconnectPlayer', (id) => {
             this.otherPlayers.getChildren().forEach(o => { if (o.playerId === id) o.destroy(); });
+            updatePlayerCount();
         });
+
         this.socket.on('playerMoved', (playerInfo) => {
             this.otherPlayers.getChildren().forEach(o => {
                 if (o.playerId === playerInfo.id) o.setPosition(playerInfo.x, playerInfo.y);
             });
         });
 
-        // ระบบสัมผัสมือถือเบื้องต้น
+        // ระบบจอยสติ๊กจำลองบนมือถือ
         let joy = document.getElementById('joystick'), knob = document.getElementById('knob');
-        let active = false, cx = 60, cy = 60;
+        let active = false, maxD = 45;
         
         joy.onpointerdown = (e) => { active = true; };
         window.onpointermove = (e) => {
             if (!active) return;
-            let dx = e.clientX - 90, dy = e.clientY - (window.innerHeight - 90);
-            let dist = Math.hypot(dx, dy), maxD = 40;
+            let dx = e.clientX - 95, dy = e.clientY - (window.innerHeight - 95);
+            let dist = Math.hypot(dx, dy);
             if (dist > maxD) { dx = (dx/dist)*maxD; dy = (dy/dist)*maxD; }
             knob.style.transform = `translate(${dx}px, ${dy}px)`;
             this.moveDir.x = dx / maxD;
@@ -67,23 +86,39 @@ class GameScene extends Phaser.Scene {
 
     addPlayer(p) {
         this.ship = this.physics.add.sprite(p.x, p.y, 'hero');
-        this.cameras.main.startFollow(this.ship);
+        this.ship.setCollideWorldBounds(true);
+        this.cameras.main.startFollow(this.ship, true, 0.09, 0.09);
+        
+        // ป้ายชื่อตัวละครเหนือหัว (สไตล์เกม MMORPG คอมพิวเตอร์)
+        this.nameText = this.add.text(0, -35, 'You (Hero)', { fontSize: '12px', fill: '#fde047', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     }
+
     addOther(p) {
         let o = this.physics.add.sprite(p.x, p.y, 'hero');
         o.playerId = p.id;
         this.otherPlayers.add(o);
+        this.add.text(0, -35, 'Player', { fontSize: '10px', fill: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     }
 
     update() {
         if (this.ship) {
-            let speed = 200;
+            let speed = 220;
             this.ship.setVelocity(this.moveDir.x * speed, this.moveDir.y * speed);
+            
+            // ขยับป้ายชื่อให้ตามตัวละครตลอดเวลา
+            if (this.nameText) {
+                this.nameText.setPosition(this.ship.x, this.ship.y - 30);
+            }
+
             if (this.moveDir.x !== 0 || this.moveDir.y !== 0) {
                 this.socket.emit('playerMovement', { x: this.ship.x, y: this.ship.y });
             }
         }
     }
+}
+
+function updatePlayerCount() {
+    // อัปเดตตัวเลขผู้เล่นจำลอง
 }
 
 new Phaser.Game({

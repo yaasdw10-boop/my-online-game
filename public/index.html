@@ -3,77 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Asura Online - PC Client Edition</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
+    <title>Asura Online - 3D Web Edition</title>
+    <!-- โหลด Babylon.js 3D Engine จาก CDN ทางการ -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <style>
+        body, html { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: Tahoma, sans-serif; user-select: none; touch-action: none; }
+        #renderCanvas { width: 100%; height: 100%; display: block; outline: none; }
+        
+        /* UI HUD ด้านบน */
+        #hud-top { position: fixed; top: 10px; left: 10px; color: #fff; background: rgba(15,23,42,0.85); padding: 8px 12px; border-radius: 6px; border: 1px solid #f59e0b; font-size: 11px; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .bar-bg { width: 120px; height: 6px; background: #020617; border-radius: 3px; margin-top: 3px; overflow: hidden; border: 1px solid #475569; }
+        #hp-fill { width: 100%; height: 100%; background: #ef4444; transition: width 0.2s; }
+
+        /* ปุ่มควบคุมทิศทางจำลองบนหน้าจอ */
+        #joystick { position: fixed; bottom: 30px; left: 30px; width: 110px; height: 110px; background: rgba(255,255,255,0.08); border: 2px solid rgba(245,158,11,0.4); border-radius: 50%; z-index: 10; display: flex; align-items: center; justify-content: center; }
+        #knob { width: 45px; height: 45px; background: radial-gradient(circle, #f59e0b, #d97706); border-radius: 50%; position: absolute; pointer-events: none; box-shadow: 0 0 10px rgba(245,158,11,0.6); }
+
+        /* ปุ่มโจมตี 3D */
+        #attack-btn { position: fixed; bottom: 40px; right: 30px; width: 75px; height: 75px; background: radial-gradient(circle, #ef4444, #991b1b); border: 3px solid #fca5a5; border-radius: 50%; z-index: 10; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: bold; box-shadow: 0 6px 18px rgba(239,68,68,0.7); cursor: pointer; }
+    </style>
 </head>
 <body>
 
-    <!-- แถบเมนูด้านบนสไตล์ PC MMORPG -->
-    <div id="asura-top-bar">
-        <div class="top-left-info">
-            <div class="player-title"><span id="ui-name">Hero</span> <span style="color:#f6e05e;">[LV.<span id="ui-lvl">1</span>]</span></div>
-            <div class="bar-label">HP: <span id="ui-hp">150</span>/<span id="ui-mhp">150</span></div>
-            <div class="asura-bar-bg"><div id="hp-bar"></div></div>
-            <div class="bar-label">SP: <span id="ui-sp">80</span>/<span id="ui-msp">80</span></div>
-            <div class="asura-bar-bg"><div id="sp-bar"></div></div>
-        </div>
-        <div class="top-skills">
-            <div class="skill-slot" onclick="useActiveSkill()">F1</div>
-            <div class="skill-slot" onclick="useActiveSkill()">F2</div>
-            <div class="skill-slot" onclick="useActiveSkill()">F3</div>
-            <div class="skill-slot" onclick="useItem('hp_potion')">💊</div>
-            <div class="skill-slot" onclick="useItem('sp_potion')">🧪</div>
-        </div>
+    <div id="hud-top">
+        <b>⚔️ Hero 3D [Lv.1]</b>
+        <div style="font-size:9px; margin-top:2px;">HP: 150 / 150</div>
+        <div class="bar-bg"><div id="hp-fill"></div></div>
     </div>
 
-    <div id="minimap">📍 Prontera Field<br>(PC Engine)</div>
-    <div id="target-hud">🎯 เป้าหมาย: <span id="target-name">ไม่มี</span></div>
-
-    <!-- กล่องแชท -->
-    <div id="chat-container">
-        <div id="chat-box"><div>[ระบบ]: เริ่มต้นระบบ Client แบบแยกโมดูลสำเร็จ</div></div>
-        <div id="chat-input-row">
-            <input type="text" id="chat-input" placeholder="พิมพ์ข้อความ...">
-            <button id="chat-send" onclick="sendChat()">ส่ง</button>
-        </div>
-    </div>
-
-    <!-- ปุ่มควบคุมการเคลื่อนไหวและโจมตี -->
     <div id="joystick"><div id="knob"></div></div>
-    <div id="skill-btn" onclick="useActiveSkill()">⚡ Bash</div>
-    <div id="action-btn" onclick="triggerAttack(false)">⚔️ โจมตี</div>
+    <div id="attack-btn" onclick="triggerAttack()">⚔️ ตี</div>
 
-    <!-- Modal หน้าต่างสถานะและไอเท็ม -->
-    <div id="inventory-modal" class="modal">
-        <span class="modal-close" onclick="toggleModal('inventory-modal')">X</span>
-        <h3>📦 ช่องเก็บของ (Inventory)</h3>
-        <div id="inventory-list" style="max-height: 160px; overflow-y: auto;"></div>
-    </div>
+    <canvas id="renderCanvas"></canvas>
 
-    <div id="stat-modal" class="modal">
-        <span class="modal-close" onclick="toggleModal('stat-modal')">X</span>
-        <h3>📊 สถานะตัวละคร (Status)</h3>
-        <div style="font-size:10px; margin-bottom:6px;">แต้มคงเหลือ: <span id="stat-point" style="color:#48bb78; font-weight:bold;">0</span></div>
-        <div class="stat-row"><span>STR: <b id="val-str">6</b></span> <button class="stat-btn" onclick="upgradeStat('str')">+</button></div>
-        <div class="stat-row"><span>AGI: <b id="val-agi">5</b></span> <button class="stat-btn" onclick="upgradeStat('agi')">+</button></div>
-        <div class="stat-row"><span>VIT: <b id="val-vit">5</b></span> <button class="stat-btn" onclick="upgradeStat('vit')">+</button></div>
-        <div class="stat-row"><span>INT: <b id="val-int">5</b></span> <button class="stat-btn" onclick="upgradeStat('int')">+</button></div>
-        <div class="stat-row"><span>DEX: <b id="val-dex">5</b></span> <button class="stat-btn" onclick="upgradeStat('dex')">+</button></div>
-        <div class="stat-row"><span>LUK: <b id="val-luk">5</b></span> <button class="stat-btn" onclick="upgradeStat('luk')">+</button></div>
-    </div>
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
 
-    <!-- แถบเมนูลัดด้านล่าง -->
-    <div id="asura-bottom-menu">
-        <button class="menu-btn" onclick="toggleModal('inventory-modal')">📦 ไอเท็ม</button>
-        <button class="menu-btn" onclick="toggleModal('stat-modal')">📊 สถานะ</button>
-        <button class="menu-btn" onclick="alert('ระบบสกิลขั้นสูง')">⚡ สกิล</button>
-        <button class="menu-btn" onclick="alert('ระบบเควส')">📜 เควส</button>
-        <button class="menu-btn" onclick="alert('แผนที่โลก')">🗺️ แผนที่</button>
-    </div>
+        const createScene = function () {
+            const scene = new BABYLON.Scene(scene);
+            scene.clearColor = new BABYLON.Color3(0.05, 0.09, 0.16);
 
-    <script src="js/scenes/GameScene.js"></script>
-    <script src="js/main.js"></script>
+            // ตั้งค่ากล้องมุมมอง 3D Isometric / RPG
+            const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 3.5, 22, BABYLON.Vector3.Zero(), scene);
+            camera.lowerRadiusLimit = 12;
+            camera.upperRadiusLimit = 35;
+
+            // แสงไฟในฉาก 3D
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.8;
+            
+            const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), scene);
+            dirLight.position = new BABYLON.Vector3(20, 40, 20);
+            dirLight.intensity = 0.6;
+
+            // สร้างพื้นสนามหญ้า 3D
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 100, height: 100 }, scene);
+            const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+            groundMat.diffuseColor = new BABYLON.Color3(0.12, 0.35, 0.18);
+            ground.material = groundMat;
+
+            // สร้างตัวละคร 3D (ประกอบจากกล่องและทรงกลม Low-Poly 3D)
+            const player = new BABYLON.TransformNode("playerRoot", scene);
+            
+            // ลำตัว
+            const body = BABYLON.MeshBuilder.CreateBox("body", { width: 1.2, height: 1.8, depth: 0.7 }, scene);
+            body.position.y = 1.2;
+            body.parent = player;
+            const bodyMat = new BABYLON.StandardMaterial("bodyMat", scene);
+            bodyMat.diffuseColor = new BABYLON.Color3(0.13, 0.38, 0.85);
+            body.material = bodyMat;
+
+            // ศีรษะ
+            const head = BABYLON.MeshBuilder.CreateSphere("head", { diameter: 1 }, scene);
+            head.position.y = 2.4;
+            head.parent = player;
+            const headMat = new BABYLON.StandardMaterial("headMat", scene);
+            headMat.diffuseColor = new BABYLON.Color3(1, 0.87, 0.73);
+            head.material = headMat;
+
+            // ดาบ 3D ข้างตัว
+            const sword = BABYLON.MeshBuilder.CreateBox("sword", { width: 0.2, height: 2, depth: 0.4 }, scene);
+            sword.position = new BABYLON.Vector3(0.9, 1.2, 0);
+            sword.rotation.z = -0.3;
+            sword.parent = player;
+            const swordMat = new BABYLON.StandardMaterial("swordMat", scene);
+            swordMat.diffuseColor = new BABYLON.Color3(0.9, 0.9, 0.9);
+            sword.material = swordMat;
+
+            // มอนสเตอร์ 3D (Poring 3D ทรงกลมดุ๊กดิ๊ก)
+            const monster = BABYLON.MeshBuilder.CreateSphere("monster", { diameter: 1.8 }, scene);
+            monster.position = new BABYLON.Vector3(6, 0.9, 5);
+            const monMat = new BABYLON.StandardMaterial("monMat", scene);
+            monMat.diffuseColor = new BABYLON.Color3(0.95, 0.4, 0.7);
+            monster.material = monMat;
+
+            // กล้องติดตามตัวละคร 3D
+            camera.lockedTarget = player;
+
+            // ระบบบังคับทิศทาง 3D (Joystick)
+            let moveVector = new BABYLON.Vector3(0, 0, 0);
+            let isMoving = false;
+
+            let joy = document.getElementById('joystick'), knob = document.getElementById('knob');
+            let active = false, maxD = 35;
+
+            joy.onpointerdown = () => { active = true; };
+            window.onpointermove = (e) => {
+                if (!active) return;
+                let rect = joy.getBoundingClientRect();
+                let dx = e.clientX - (rect.left + rect.width / 2);
+                let dy = e.clientY - (rect.top + rect.height / 2);
+                let dist = Math.hypot(dx, dy);
+                if (dist > maxD) { dx = (dx/dist)*maxD; dy = (dy/dist)*maxD; }
+                knob.style.transform = `translate(${dx}px, ${dy}px)`;
+                
+                // แปลงทิศทางบนจอเป็นพิกัด 3D บนพื้น X และ Z
+                moveVector.x = (dx / maxD) * 0.12;
+                moveVector.z = -(dy / maxD) * 0.12;
+                isMoving = true;
+            };
+            window.onpointerup = () => {
+                active = false;
+                knob.style.transform = `translate(0px, 0px)`;
+                moveVector.set(0, 0, 0);
+                isMoving = false;
+            };
+
+            // ลูปการทำงานของเกม 3D ทุกเฟรม
+            scene.registerBeforeRender(() => {
+                if (isMoving) {
+                    player.position.addInPlace(moveVector);
+                    // ให้ตัวละครหันหน้าไปตามทิศทางที่เดิน
+                    player.rotation.y = Math.atan2(moveVector.x, moveVector.z);
+                }
+            });
+
+            return scene;
+        };
+
+        const scene = createScene();
+        engine.runRenderLoop(() => { scene.render(); });
+        window.addEventListener("resize", () => { engine.resize(); });
+
+        function triggerAttack() {
+            // เอฟเฟกต์กระโดดโจมตี 3D เบื้องต้น
+            console.log("Attack 3D Triggered!");
+        }
+    </script>
 </body>
 </html>
